@@ -3,7 +3,13 @@
 ## Problem
 Uber’s Driver team is interested in predicting which driver signups are most likely to start driving. To help explore this question, we have provided a sample dataset of a cohort of driver signups in January 2016.The data was pulled a few months after they signed up to include the result of whether they actually completed their first trip. It also includes several pieces of background information gather about the driver and their car.
 
-We would like you to use this data set to help understand what factors are best at predicting whether a signup will start to drive, and offer suggestions to operationalize those insights to help Uber.
+The goal of the challenge is to understand what factors are best at predicting whether someone who signs up will actually drive, and offer suggestions to how to put those insights to use in order to help Uber. With that being said, there are 3 steps to complete:
+
+* 1. Clean, Explore, Visualize the data as needed to find out what fraction of the signups took an initial first trip.
+
+* 2. Build, Run, and Evaluate a Predictive Model that will help Uber determine whether or not someone who signs up will start driving. Possibly run a model selection process to discuss why the chosen model was selected, any alternatives that were considered, and any concerns that may have come up.
+
+* 3. Discuss the insights drawn from the model and how Uber may leverage them to get more signups to take their first trip.
 
 ## Dataset Description
 * `id`: driver_id
