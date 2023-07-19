@@ -1,0 +1,395 @@
+---
+title: "Uber Data Science Challenge"
+output: html_notebook
+---
+
+```{r}
+uber_df <- read_csv('/Users/nguyenhalinh/Desktop/Github/UberDataScienceChallenge/datasets/ds_challenge_v2_1_data.csv',
+                    show_col_types = FALSE)
+```
+
+```{r}
+head(uber_df)
+```
+
+## **Data Manipulation** 
+
+#### **Driver Signup Criteria**:
+1. **Sucessful Signup**: Drivers who finished background check, added vehicle and starting their first trip
+2. **In-Progress**: Drivers who completed signing up, background check and added vehicle, but haven't started driving
+3. **Wait-and-See**: Drivers who just finished initial signing up, but didn't go through background check or didn't add vehicle
+
+```{r}
+## Show data dimension
+dim(uber_df)
+```
+
+```{r}
+# Data Types
+sapply(uber_df,typeof)
+```
+```{r}
+# Count unique values in each column
+sapply(uber_df, function(x) length(unique(x)))
+```
+
+```{r}
+# Count missing values
+colSums(is.na(uber_df))
+```
+
+According to Uber’s Privacy Policy, consent to a background check is required for driver partners where permitted by law. Therefore, we can disregard all signups that is missing a background check date.
+
+There is a general rule that I like to follow that pertains to handling missing data: if a feature has more than 60% of its values missing, I discard the feature. If I choose to fill those missing values, I will be assumming 60% of the data. This can have an effect on the confidence of the model and the overall analysis of this specific task. However, if I wanted to do analysis pertaining to that specific feature, then I would use imputation methods such as mean or median to fill in the missing values.
+
+I will create 4 new features:
+
+* A feature that represents if someone took their first drive or not
+* A feature that represents the time difference between when a person signs up and when they submit their background check consent form
+* A feature that represents the time difference between when a person submits their background check consent form and when they add their vehicle
+* A feature that represents the time difference between when a person adds their vehicle and when they complete their first drive
+* A feature that represents the time difference between when a person signs up and when they complete their first drive
+
+
+```{r}
+# Drop missing values in bgc_date column
+uber_df <- uber_df[!is.na(uber_df$bgc_date), ]
+```
+
+```{r}
+# Create Target column (Whether the driver completed first drive or not)
+uber_df$is_completed <- ifelse(is.na(uber_df$first_completed_date), 0, 1)
+
+```
+```{r}
+head(uber_df)
+```
+
+```{r}
+# Convert date columns to date type
+# Specify the date columns to convert
+date_columns <- c("signup_date", "bgc_date", "vehicle_added_date", "first_completed_date")
+
+# Convert multiple date columns to datetime type
+uber_df[date_columns] <- lapply(uber_df[date_columns], as.Date, format = "%m/%d/%Y")
+```
+
+```{r}
+# Data Types
+sapply(uber_df,typeof)
+```
+```{r}
+# Calculate the number of days difference from signup to complete first ride
+uber_df$signup_to_completed = uber_df$first_completed_date - uber_df$signup_date
+
+# Calculate the number of days difference from signup to background check
+uber_df$signup_to_bgc = uber_df$bgc_date - uber_df$signup_date
+
+# Calculate the number of days difference from background check to vehicle added information date
+uber_df$bgc_to_vehicle = uber_df$vehicle_added_date - uber_df$bgc_date
+
+# Calculate the number of days difference from vehicle added date to complete first ride
+uber_df$vehicle_to_completed = uber_df$first_completed_date - uber_df$bgc_date
+
+```
+```{r}
+head(uber_df)
+```
+
+
+# **Exploratory Data Analysis** #
+
+### **Which city attracts the most new drivers signing up ?**
+
+```{r}
+# Count the number of drivers in each city
+driver_counts <- table(uber_df$city_name)
+
+# Convert the driver counts to a data frame
+driver_counts_df <- as.data.frame(driver_counts)
+
+# Rename the columns in the driver counts data frame
+names(driver_counts_df) <- c("City", "Driver_Count")
+
+# Sort the data in descending order
+driver_counts_df <- driver_counts_df[order(driver_counts_df$Driver_Count, decreasing = TRUE), ]
+
+# Create a bar graph
+ggplot(driver_counts_df, aes(x = factor(City, levels = City), y = Driver_Count)) +
+  geom_bar(stat = "identity", fill = "darkorange") +
+  labs(title = "Number of Drivers in Each City", x = "City", y = "Driver Count") +
+  theme_minimal()
+```
+
+```{r}
+# Group the data frame by 'city_name' and 'is_completed' and calculate the percentages
+grouped <- aggregate(is_completed ~ city_name, data = uber_df, FUN = function(x) sum(x) / length(x) * 100)
+grouped$not_completed <- 100 - grouped$is_completed
+
+# Convert the data to long format
+grouped_long <- tidyr::gather(grouped, key = Status, value = Percentage, is_completed, not_completed)
+grouped_long$Status <- factor(grouped_long$Status, levels = c("is_completed", "not_completed"))
+
+# Create the grouped bar chart
+ggplot(grouped_long, aes(x = city_name, y = Percentage, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Percentage of Completed and Not Completed First Drives by City", x = "City", y = "Percentage") +
+  scale_fill_manual(values = c("is_completed" = "darkorange", "not_completed" = "gray")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+```{r}
+# Group by 'City' and count the number of drivers signing up on each date
+grouped <- uber_df %>%
+  group_by(city_name, signup_date) %>%
+  summarise(Count = n())
+
+# Pivot the DataFrame to have cities as columns and dates as the index
+df_pivot <- pivot_wider(grouped, names_from = city_name, values_from = Count, names_sort = TRUE)
+
+# Plot the line chart
+ggplot(df_pivot, aes(x = signup_date)) +
+  geom_line(aes(y = Berton, color = "Berton")) +
+  geom_line(aes(y = Strark, color = "Strark")) +
+  geom_line(aes(y = Wrouver, color = "Wrouver")) + 
+  # Add more geom_line() statements for additional cities if needed
+  labs(title = "Number of Drivers Signing Up Over Time", x = "Date", y = "Number of Drivers") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = c("blue", "red", "orange"))  # Specify colors for each city
+
+```
+
+* Most drivers signing up are from Strark but Berton has slightly more percentage of signed up drivers that officially become Uber drivers
+* Strark and Berton have the same trend of the number of drivers signing up
+
+
+### **Which sign-up channel brings us the most drivers?**
+
+```{r}
+# Count the number of signups through each channel
+channel_counts <- table(uber_df$signup_channel)
+
+# Convert the channel counts to a data frame
+channel_counts_df <- as.data.frame(channel_counts)
+
+# Rename the columns in the driver counts data frame
+names(channel_counts_df) <- c("Channel", "Frequency")
+
+# Sort the data in descending order
+channel_counts_df <- channel_counts_df[order(channel_counts_df$Frequency, decreasing = TRUE), ]
+
+# Create a bar graph
+ggplot(channel_counts_df, aes(x = factor(Channel, levels = Channel), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Number of Signups in Channel", x = "Channel", y = "Frequency") +
+  theme_minimal()
+```
+```{r}
+# Group the data frame by 'singup_channel' and 'is_completed' and calculate the percentages
+grouped <- aggregate(is_completed ~ signup_channel, data = uber_df, FUN = function(x) sum(x) / length(x) * 100)
+grouped$not_completed <- 100 - grouped$is_completed
+
+# Convert the data to long format
+grouped_long <- tidyr::gather(grouped, key = Status, value = Percentage, is_completed, not_completed)
+grouped_long$Status <- factor(grouped_long$Status, levels = c("is_completed", "not_completed"))
+
+# Create the grouped bar chart
+ggplot(grouped_long, aes(x = signup_channel, y = Percentage, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Percentage of Completed and Not Completed First Drives by Signup Channel", x = "Signup Channel", y = "Percentage") +
+  scale_fill_manual(values = c("is_completed" = "steelblue", "not_completed" = "gray")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+Although most drivers signed up through Paid channels, drivers who signed up through Referral are more likely to complete their first drive. This can be useful information. The more signups Uber get by referrals, the more drivers they can produce which can increase revenue.
+
+
+### **Chi-square test for Signup Device and First Drive Completion**
+* **Null Hypothesis:** There is no relationship between Signup Device and First Drive Completion
+* **Alternative Hypothesis:** There is a statistically significant relationship between Signup Device and First Drive Completion
+
+```{r}
+# Count the number of drivers in each signup device
+signup_os_counts <- table(uber_df$signup_os)
+
+# Convert the driver counts to a data frame
+signup_os_counts_df <- as.data.frame(signup_os_counts)
+
+# Rename the columns in the driver counts data frame
+names(signup_os_counts_df) <- c("Device", "Frequency")
+
+# Sort the data in descending order
+signup_os_counts_df <- signup_os_counts_df[order(signup_os_counts_df$Frequency, decreasing = TRUE), ]
+
+# Create a bar graph
+ggplot(signup_os_counts_df, aes(x = factor(Device, levels = Device), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "forestgreen") +
+  labs(title = "Number of Signups in Each Device", x = "Device", y = "Frequency") +
+  theme_minimal()
+```
+
+```{r}
+# Create a contingency table
+contingency <- table(uber_df$is_completed, uber_df$signup_os)
+contingency
+```
+
+```{r}
+# Perform the chi-square test
+result <- chisq.test(contingency)
+result
+```
+
+From Chi-square test, our p-value is less than 0.05, which means that there is a statistically significant relationship between signup device and completion first drive. Furthermore, from the aboved bar chart, most drivers are signed up on ios web. Thus, Uber should focus more on ios web to attract more drivers
+
+
+### **What is the most popular type of vehicles for delivering ride-hailing service among registered new drivers ?**
+
+```{r}
+# Count the number of signups in each vehicle make
+vehicle_counts <- table(uber_df$vehicle_make)
+
+# Convert the driver counts to a data frame
+vehicle_counts_df <- as.data.frame(vehicle_counts)
+
+# Rename the columns in the driver counts data frame
+names(vehicle_counts_df) <- c("Vehicle", "Frequency")
+
+# Sort the data in descending order
+vehicle_counts_df <- vehicle_counts_df[order(vehicle_counts_df$Frequency, decreasing = TRUE), ]
+
+# Select the top 10 values
+top_10 <- vehicle_counts_df[1:10, ]
+# Convert category to a factor with levels in the desired order
+top_10$Frequency <- factor(top_10$Frequency, levels = rev(top_10$Frequency))
+
+# Create a bar graph
+ggplot(top_10, aes(x = factor(Vehicle, levels = Vehicle), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "purple") +
+  labs(title = "Top 10 Vehicle Make", x = "Vehicle", y = "Frequency") +
+  theme_minimal()
+```
+Tokyota and Honda are the 2 most popular vehicle brands for drivers to start their ride-hailing business
+
+
+### **What is the percentage of drivers signing up became Uber drivers?** 
+
+```{r}
+# Calculate the percentage of drivers who completed and did not complete their first drive
+completed_counts <- sum(uber_df$is_completed)
+completed_pct <- completed_counts / nrow(uber_df) * 100
+not_completed_pct <- 100 - completed_pct
+
+# Create the bar chart
+labels <- c("Completed", "Not Completed")
+pcts <- c(completed_pct, not_completed_pct)
+
+# Add percentage labels on top of each bar
+text(x = barplot(pcts, ylim = c(0, max(pcts) + 10), names.arg = labels, xlab = "Completion Status",
+                 ylab = "Percentage", main = "Percentage of Drivers Who Completed First Drive",col = "steelblue"),
+     y = pcts + 1, labels = paste0(round(pcts, 1), "%"), pos = 3, cex = 0.8)
+```
+
+Only 18.7% of all sign-up drivers completed their first drivers. Thus, this dataset is highly imbalanced, we should be cautious when implementing predictive models
+
+
+### **How the percentage of drivers completed each stage changes?**
+
+```{r}
+# Calculate completion percentages for each stage
+signup_percentage <- 100
+bgc_percentage <- (sum(!is.na(uber_df$bgc_date)) / nrow(uber_df)) * 100
+vehicle_percentage <- (sum(!is.na(uber_df$vehicle_added_date)) / nrow(uber_df)) * 100
+first_trip_percentage <- (sum(!is.na(uber_df$first_completed_date)) / nrow(uber_df)) * 100
+
+# Create the line plot
+stages <- c("Signup", "Background Check", "Vehicle Added", "First Trip")
+percentages <- c(signup_percentage, bgc_percentage, vehicle_percentage, first_trip_percentage)
+
+plot(percentages, type = "o", xaxt = "n", xlab = "Stages", ylab = "Percentage Completed",
+     main = "Percentage of Drivers Completed in Each Stage")
+
+# Set x-axis labels
+axis(1, at = 1:length(stages), labels = stages)
+
+```
+
+### **Distribution of days that took drivers to complete each stage**
+
+```{r}
+# Filter the DataFrame to exclude NA values
+filtered_df <- subset(uber_df, !is.na(signup_to_completed))
+
+# Convert 'signup_to_completed' column to numeric
+filtered_df$signup_to_completed <- as.numeric(as.character(filtered_df$signup_to_completed))
+
+# Plot the distribution of the 'signup_to_completed' column
+hist(filtered_df$signup_to_completed, breaks = "FD", col = "steelblue", border = "black",
+     xlab = "Days", ylab = "Frequency",
+     main = "Distribution of days between Signup Date and First Drive Completion Date")
+```
+
+```{r}
+# Filter the DataFrame to exclude NA values
+filtered_df <- subset(uber_df, !is.na(signup_to_bgc))
+
+# Convert 'signup_to_bgc' column to numeric
+filtered_df$signup_to_bgc <- as.numeric(as.character(filtered_df$signup_to_bgc))
+
+# Plot the distribution of the 'signup_to_bgc' column
+hist(filtered_df$signup_to_bgc, breaks = "FD", col = "steelblue", border = "black",
+     xlab = "Days", ylab = "Frequency",
+     main = "Distribution of days between Signup Date and Background Check Date")
+```
+
+```{r}
+# Filter the DataFrame to exclude NA values
+filtered_df <- subset(uber_df, !is.na(bgc_to_vehicle))
+
+# Convert 'bgc_to_vehicle' column to numeric
+filtered_df$bgc_to_vehicle <- as.numeric(as.character(filtered_df$bgc_to_vehicle))
+
+# Plot the distribution of the 'signup_to_bgc' column
+hist(filtered_df$bgc_to_vehicle, breaks = "FD", col = "steelblue", border = "black",
+     xlab = "Days", ylab = "Frequency",
+     main = "Distribution of days between Background Check Date and Vehicle Added Date")
+```
+
+```{r}
+# Filter the DataFrame to exclude NA values
+filtered_df <- subset(uber_df, !is.na(vehicle_to_completed))
+
+# Convert 'vehicle_to_completed' column to numeric
+filtered_df$vehicle_to_completed <- as.numeric(as.character(filtered_df$vehicle_to_completed))
+
+# Plot the distribution of the 'vehicle_to_completed' column
+hist(filtered_df$vehicle_to_completed, breaks = "FD", col = "steelblue", border = "black",
+     xlab = "Days", ylab = "Frequency",
+     main = "Distribution of days between Vehicle Added Date and First Drive Completion Date")
+```
+
+Based on the distributions:
+
+1. Time to Complete First Drive: Uber can focus on optimizing the onboarding process and reducing the time it takes for drivers to sign up and complete their first drive. Streamlining the registration and verification procedures, providing clear instructions, and offering support during the initial stages can help accelerate this process.
+
+2. Background Check Efficiency: The skewed distribution suggests that drivers tend to complete the background check relatively quickly. Uber can continue to prioritize efficient background check processes to maintain this trend. Ensuring prompt communication, reducing processing times, and implementing streamlined verification systems can contribute to a smooth and expedited background check process.
+
+3. Vehicle Addition before Background Check: The finding that drivers can add their vehicle before completing the background check implies that Uber has implemented a flexible approach. This approach allows drivers to proactively complete tasks while awaiting the background check results. Uber can continue to emphasize this flexibility and provide clear guidelines to drivers regarding the order of completion for different tasks.
+
+4. Time from Vehicle Addition to First Drive: The insight that it typically takes drivers 2-5 days to complete their first drive after adding their vehicle suggests a potential opportunity for Uber to optimize the remaining steps after vehicle addition. Ensuring efficient scheduling, offering timely training, and providing resources to help drivers navigate the final stages can contribute to reducing the time gap between vehicle addition and the first completed drive.
+
+
+# **Conclusion**
+
+### Insights
+* The main factor that is best at predicting whether someone who signs up completes their first drive is the time it takes them to submit their background check consent form. Uber may want to come up with ways to encourage their signups to complete their background check consent form as soon as possible. Overall, Uber should highlight the importance of a streamlined onboarding process, efficient background checks, clear guidelines for task completion, and support for drivers at each stage. By addressing these aspects, Uber can enhance the driver onboarding experience and potentially increase the number of drivers joining and completing their first drives.
+
+* The analysis revealed that although Uber receives most of their signups through the Paid channel, more signups who completed their first drive signed up through a Referral. This could be a good opportunity for Uber to increase their signups by referrals.
+
+* During the Chi-Squared Test, I noticed that most signups who completed their first drive signed up using an iOS device. If Uber make plans to somehow target apple users a little more, it may help increase the first driver rate.
+
+### Improvements
+* Univariate Analysis - The features that I removed in the cleaning process could have been explored more. Maybe the year of the vehicle contributed heavily to whether a signup completed their first drive. For example, what if cars produced after 2011 were more likely to drive after signing up. 
