@@ -26,7 +26,7 @@ The goal of the challenge is to understand what factors are best at predicting w
 
 ## Insights and Recommendation
 ### Insights
-* The main factor that is best at predicting whether someone who signs up completes their first drive is the time it takes them to submit their background check consent form. Uber may want to come up with ways to encourage their signups to complete their background check consent form as soon as possible.
+* The main factor that is best at predicting whether someone who signs up completes their first drive is the time it takes them to submit their background check consent form. Uber may want to come up with ways to encourage their signups to complete their background check consent form as soon as possible. Overall, Uber should highlight the importance of a streamlined onboarding process, efficient background checks, clear guidelines for task completion, and support for drivers at each stage. By addressing these aspects, Uber can enhance the driver onboarding experience and potentially increase the number of drivers joining and completing their first drives.
 
 * The analysis revealed that although Uber receives most of their signups through the Paid channel, more signups who completed their first drive signed up through a Referral. This could be a good opportunity for Uber to increase their signups by referrals.
 
